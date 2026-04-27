@@ -125,9 +125,11 @@ with tab3:
             3 Torsdag FM: Hyrläkare SKA vara dispo. 
             4 FM-disponibel SKA få ENDAST Telefon eller Recept EM. 
             5 EM-disponibel SKA få ENDAST Telefon eller Recept FM.
-            6. Disponibel SKA ansvara för studentstöd
+            6.Disponibel SKA ansvara för studentstöd
             7. BVC-PLANERING: Om det anges i veckans ändringar att det är BVC, ska en av de läkare som är markerade som 'BVC-läkare' tilldelas detta på onsdagar och torsdagar. 
-            BVC innebär att läkaren är helt låst för barnavård och har inga akuta tider eller mottagning på vårdcentralen under den tiden."""
+               BVC innebär att läkaren är helt låst för barnavård och har inga akuta tider eller mottagning på vårdcentralen under den tiden.
+            8. RONDTID (11:30-12:00): Varje dag kl. 11:30-12:00 SKA alla läkare tilldelas 'Rondtid'. 
+               UNDANTAG: De läkare som är 'Disponibla', har 'BVC' eller har 'ÖLI-mottagning' under denna tid ska INTE ha rondtid. Alla andra MÅSTE ha detta inplanerat."""
             
             p_res = openrouter_client.chat.completions.create(
                 model="deepseek/deepseek-chat",
@@ -149,6 +151,9 @@ with tab3:
             6. STUDENTSTÖD: Alla disponibla pass ska vara märkta som 'Disponibel + Studentstöd'.
             7. VECKANS ÄNDRINGAR: Se till att dessa är följda: {st.session_state.weekly_notes}
             8. BVC-CHECK: Om BVC är aktiverat i veckans ändringar, kontrollera att en behörig BVC-läkare har tilldelats passet och att de inte har fått några andra patienter samtidigt.
+            9. ROND-KONTROLL: Kontrollera att alla läkare har 'Rondtid' kl. 11:30-12:00 varje dag. 
+               Säkerställ att de enda som saknar rondtid är de som är markerade som 'Disponibel', 'BVC' eller 'ÖLI-mottagning'. 
+               Ingen annan får ha patienter eller admin under denna halvtimme.
 
             Om du hittar fel, korrigera dem i slutgiltiga matrisen.
             SCHEMA SOM SKA GRANSKAS: 
