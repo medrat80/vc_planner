@@ -114,7 +114,7 @@ with tab3:
         if st.button("Rensa noteringar"): st.session_state.weekly_notes = ""; st.rerun()
 
     if st.button("🚀 Generera Agentic Matris", type="primary"):
-        with st.spinner("Ajanlar (DeepSeek + Claude Opus) çalışıyor..."):
+        with st.spinner("AI-agenterna (DeepSeek + Claude Opus) arbetar..."):
             # AGENT 1: PLANNER (DEEPSEEK)
             p_prompt = f"""Skapa matris-schema för v.{v_start}-v.{v_end}.
             PERSONAL: {st.session_state.staff_list}
