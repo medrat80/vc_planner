@@ -160,7 +160,7 @@ with tab3:
                Säkerställ att de enda som saknar rondtid är de som är markerade som 'Disponibel', 'BVC' eller 'ÖLI-mottagning'. 
                Ingen annan får ha patienter eller admin under denna halvtimme.
             10.TORSDAGS-MÖTESKONTROLL: Kontrollera att det är Läkarmöte på torsdag morgon. 
-               Eftersom detta är en {'JÄMN' if vecka_num % 2 == 0 else 'UDDA'} vecka (v.{vecka_num}), ska alla ordinarie läkare ha blockerad tid för möte kl. {'08:00-10:00' if vecka_num % 2 == 0 else '08:00-09:00'}. 
+               Eftersom detta är en {'JÄMN' if vecka_start % 2 == 0 else 'UDDA'} vecka (v.{vecka_start}), ska alla ordinarie läkare ha blockerad tid för möte kl. {'08:00-10:00' if vecka_start % 2 == 0 else '08:00-09:00'}. 
                Säkerställ att ingen ordinarie personal har patienter då. Kontrollera att hyrläkare däremot är schemalagd för arbete.
 
             Om du hittar fel, korrigera dem i slutgiltiga matrisen.
