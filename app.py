@@ -115,12 +115,19 @@ with tab3:
 
     if st.button("🚀 Generera Agentic Matris", type="primary"):
         with st.spinner("Ajanlar (DeepSeek + Claude Opus) çalışıyor..."):
-            # AJAN 1: PLANNER (DEEPSEEK)
+            # AGENT 1: PLANNER (DEEPSEEK)
             p_prompt = f"""Skapa matris-schema för v.{v_start}-v.{v_end}.
             PERSONAL: {st.session_state.staff_list}
             VECKANS JUSTERINGAR: {st.session_state.weekly_notes}
-            REGLER: 1 ÖLI (10-12) dagligen. 2 Dispo/dag (FM 08:30-12:30, EM 12:30-17:00). 
-            Torsdag FM: Hyrläkare SKA vara dispo. FM-dispo -> EM endast Tel/Rec. EM-dispo -> FM endast Tel/Rec."""
+            HUVUDREGLER FÖR PLANERINGEN:
+            1 Varje dag mellan kl. 10:00-12:00 SKA exakt en läkare tilldelas ÖLI-mottagning. Denna läkare får INTE vara 'disponibel' FM eller EM i samma dag.
+            2 Varje dag SKA exakt två OLIKA läkare tilldelas som Disponibel: en på FM (kl. 08:30-12:30) och en på EM (kl. 12:30-17:00)
+            3 Torsdag FM: Hyrläkare SKA vara dispo. 
+            4 FM-disponibel SKA få ENDAST Telefon eller Recept EM. 
+            5 EM-disponibel SKA få ENDAST Telefon eller Recept FM.
+            6. Disponibel SKA ansvara för studentstöd
+            7. BVC-PLANERING: Om det anges i veckans ändringar att det är BVC, ska en av de läkare som är markerade som 'BVC-läkare' tilldelas detta på onsdagar och torsdagar. 
+            BVC innebär att läkaren är helt låst för barnavård och har inga akuta tider eller mottagning på vårdcentralen under den tiden."""
             
             p_res = openrouter_client.chat.completions.create(
                 model="deepseek/deepseek-chat",
@@ -128,13 +135,32 @@ with tab3:
             )
             draft = p_res.choices[0].message.content
 
-            # AJAN 2: AUDITOR (CLAUDE OPUS)
+            # AGENT 2: AUDITOR (CLAUDE OPUS)
+        with st.spinner("Ajan 2: Claude Opus kalite kontrolü yapıyor..."):
+            # Önce denetleme talimatını hazırlıyoruz
+            auditor_rules = f"""
+            Du är en strikt chefsrevisor. Granska och korrigera schemat för v.{v_start}-{v_end} utifrån dessa kontrollpunkter:
+
+            1. ÖLI-KONTROLL: Finns det exakt en ÖLI-läkare kl. 10:00-12:00 varje dag? Denna person får INTE ha något dispo-pass under hela den dagen.
+            2. DISPO-DUBBLERING: Kontrollera att det är två HELT OLIKA läkare disponibla varje dag (FM 08:30-12:30 och EM 12:30-17:00).
+            3. TORSDAGS-CHECK: Hyrläkaren MÅSTE vara 'Disponibel + Studentstöd' på torsdag FM.
+            4. FM-DISPO BEGRÄNSNING: De som är FM-disponibla får ENDAST ha Telefon eller Recept på eftermiddagen. Inga patienter.
+            5. EM-DISPO BEGRÄNSNING: De som är EM-disponibla får ENDAST ha Telefon eller Recept på förmiddagen. Inga patienter.
+            6. STUDENTSTÖD: Alla disponibla pass ska vara märkta som 'Disponibel + Studentstöd'.
+            7. VECKANS ÄNDRINGAR: Se till att dessa är följda: {st.session_state.weekly_notes}
+            8. BVC-CHECK: Om BVC är aktiverat i veckans ändringar, kontrollera att en behörig BVC-läkare har tilldelats passet och att de inte har fått några andra patienter samtidigt.
+
+            Om du hittar fel, korrigera dem i slutgiltiga matrisen.
+            SCHEMA SOM SKA GRANSKAS: 
+            {draft}
+            """
+
+            # Şimdi API'yi çağırıyoruz
             a_res = openrouter_client.chat.completions.create(
                 model="anthropic/claude-3-opus",
-                messages=[{"role": "user", "content": f"Granska och korrigera schemat v.{v_start}-{v_end}. Respektera ändringarna: {st.session_state.weekly_notes}. SCHEMA: {draft}"}]
+                messages=[{"role": "user", "content": auditor_rules}]
             )
-            st.markdown(a_res.choices[0].message.content)
             
-            towrite = io.BytesIO()
-            pd.DataFrame([["Klar"]]).to_excel(towrite, index=False)
-            st.download_button("📥 Excel", data=towrite.getvalue(), file_name=f"VC_Plan_v{v_start}.xlsx")
+            # Sonucu ekrana basıyoruz
+            final_schedule = a_res.choices[0].message.content
+            st.markdown(final_schedule)
