@@ -149,7 +149,7 @@ with tab3:
 
             # AJAN 2: AUDITOR (CLAUDE OPUS)
             a_res = openrouter_client.chat.completions.create(
-                model="anthropic/claude-3-opus",
+                model="anthropic/claude-3.5-sonnet",
                 messages=[{"role": "user", "content": f"Granska och korrigera schemat v.{v_start}-{v_end}. Respektera ändringarna: {st.session_state.weekly_notes}. SCHEMA: {draft}"}]
             )
             st.markdown(a_res.choices[0].message.content)
