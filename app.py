@@ -129,7 +129,12 @@ with tab3:
             7. BVC-PLANERING: Om det anges i veckans ändringar att det är BVC, ska en av de läkare som är markerade som 'BVC-läkare' tilldelas detta på onsdagar och torsdagar. 
                BVC innebär att läkaren är helt låst för barnavård och har inga akuta tider eller mottagning på vårdcentralen under den tiden.
             8. RONDTID (11:30-12:00): Varje dag kl. 11:30-12:00 SKA alla läkare tilldelas 'Rondtid'. 
-               UNDANTAG: De läkare som är 'Disponibla', har 'BVC' eller har 'ÖLI-mottagning' under denna tid ska INTE ha rondtid. Alla andra MÅSTE ha detta inplanerat."""
+               UNDANTAG: De läkare som är 'Disponibla', har 'BVC' eller har 'ÖLI-mottagning' under denna tid ska INTE ha rondtid. Alla andra MÅSTE ha detta inplanerat.
+            9. LÄKARMÖTE (Torsdagar): Varje torsdag morgon SKA alla ordinarie läkare (EJ hyrläkare) ha 'Läkarmöte'.
+               - Vid JÄMNA veckor (t.ex. v.16, 18, 20): Kl. 08:00 - 10:00.
+               - Vid UDDA veckor (t.ex. v.15, 17, 19): Kl. 08:00 - 09:00.
+               Under denna tid får INGA ordinarie läkare ha patientbesök, admin eller andra uppgifter. 
+               UNDANTAG: Hyrläkare deltar inte i mötet och ska arbeta normalt (t.ex. med patienter)."""
             
             p_res = openrouter_client.chat.completions.create(
                 model="deepseek/deepseek-chat",
@@ -154,6 +159,9 @@ with tab3:
             9. ROND-KONTROLL: Kontrollera att alla läkare har 'Rondtid' kl. 11:30-12:00 varje dag. 
                Säkerställ att de enda som saknar rondtid är de som är markerade som 'Disponibel', 'BVC' eller 'ÖLI-mottagning'. 
                Ingen annan får ha patienter eller admin under denna halvtimme.
+            10.TORSDAGS-MÖTESKONTROLL: Kontrollera att det är Läkarmöte på torsdag morgon. 
+               Eftersom detta är en {'JÄMN' if vecka_num % 2 == 0 else 'UDDA'} vecka (v.{vecka_num}), ska alla ordinarie läkare ha blockerad tid för möte kl. {'08:00-10:00' if vecka_num % 2 == 0 else '08:00-09:00'}. 
+               Säkerställ att ingen ordinarie personal har patienter då. Kontrollera att hyrläkare däremot är schemalagd för arbete.
 
             Om du hittar fel, korrigera dem i slutgiltiga matrisen.
             SCHEMA SOM SKA GRANSKAS: 
