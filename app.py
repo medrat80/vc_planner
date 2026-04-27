@@ -16,13 +16,15 @@ openrouter_client = OpenAI(
 
 st.set_page_config(page_title="VC Planner Pro v20.1", layout="wide", page_icon="🏥")
 
-# --- PROGRAMIN BAŞI (Buraya ekle) ---
-if 'vecka_start' not in st.session_state:
-    # Program ilk açıldığında hata vermemesi için bugünkü haftayı varsayılan yapıyoruz
-    st.session_state.vecka_start = datetime.now().isocalendar()[1]
+# --- PROGRAMIN BAŞI (Hata almamak için varsayılan değerler) ---
+if 'v_start' not in st.session_state:
+    st.session_state.v_start = datetime.now().isocalendar()[1]
+if 'v_end' not in st.session_state:
+    st.session_state.v_end = datetime.now().isocalendar()[1]
 
-# Bu ismi aşağılarda kolayca kullanabilmek için sabitliyoruz
-vecka_start = st.session_state.vecka_start
+# Kısa isimler kullanalım ki aşağıda hata çıkmasın
+v_start = st.session_state.v_start
+v_end = st.session_state.v_end
 
 # --- VERİ YÖNETİMİ ---
 FILE_PATH = "staff_data_v20.json"
@@ -102,32 +104,25 @@ with tab2:
     st.subheader("📅 Tidsram")
     col_a, col_b = st.columns(2)
     
-    # 1. Sütun (Tarih Seçimi)
     with col_a:
         raw_date = st.date_input("Välj startdatum", value=datetime.now())
-        # Pazartesiye yuvarla
         start_monday = raw_date - timedelta(days=raw_date.weekday())
         
-        # HAFIZAYI GÜNCELLE
-        st.session_state.vecka_start = start_monday.isocalendar()[1]
-        vecka_start = st.session_state.vecka_start
-        
+        # HAFIZADAKİ v_start'ı GÜNCELLE
+        st.session_state.v_start = start_monday.isocalendar()[1]
+        v_start = st.session_state.v_start
         st.success(f"Startar måndag: {start_monday.strftime('%Y-%m-%d')}")
 
-    # 2. Sütun (Hafta Sayısı Seçimi)
     with col_b:
         duration = st.select_slider("Antal veckor", options=[1, 2, 3, 4, 5, 6])
         end_date = start_monday + timedelta(weeks=duration-1)
-        vecka_end = end_date.isocalendar()[1]
         
-        # Dinamik Aralığı Göster
-        if duration == 1:
-            range_text = f"v.{vecka_start}"
-        else:
-            range_text = f"v.{vecka_start} - v.{vecka_end}"
-            
+        # HAFIZADAKİ v_end'i GÜNCELLE
+        st.session_state.v_end = end_date.isocalendar()[1]
+        v_end = st.session_state.v_end
+        
+        range_text = f"v.{v_start}" if duration == 1 else f"v.{v_start} - v.{v_end}"
         st.info(f"Planeringsperiod: **{range_text}**")
-
 # --- TAB 3: GENERERA ---
 with tab3:
     if st.button("📝 Lägg till veckans specifika ändringar"):
