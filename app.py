@@ -16,16 +16,6 @@ openrouter_client = OpenAI(
 
 st.set_page_config(page_title="VC Planner Pro v20.1", layout="wide", page_icon="🏥")
 
-# --- PROGRAMIN BAŞI (Hata almamak için varsayılan değerler) ---
-if 'v_start' not in st.session_state:
-    st.session_state.v_start = datetime.now().isocalendar()[1]
-if 'v_end' not in st.session_state:
-    st.session_state.v_end = datetime.now().isocalendar()[1]
-
-# Kısa isimler kullanalım ki aşağıda hata çıkmasın
-v_start = st.session_state.v_start
-v_end = st.session_state.v_end
-
 # --- VERİ YÖNETİMİ ---
 FILE_PATH = "staff_data_v20.json"
 def save_data(data):
@@ -103,26 +93,17 @@ with tab1:
 with tab2:
     st.subheader("📅 Tidsram")
     col_a, col_b = st.columns(2)
-    
     with col_a:
         raw_date = st.date_input("Välj startdatum", value=datetime.now())
         start_monday = raw_date - timedelta(days=raw_date.weekday())
-        
-        # HAFIZADAKİ v_start'ı GÜNCELLE
-        st.session_state.v_start = start_monday.isocalendar()[1]
-        v_start = st.session_state.v_start
-        st.success(f"Startar måndag: {start_monday.strftime('%Y-%m-%d')}")
-
+        v_start = start_monday.isocalendar()[1]
     with col_b:
         duration = st.select_slider("Antal veckor", options=[1, 2, 3, 4, 5, 6])
         end_date = start_monday + timedelta(weeks=duration-1)
-        
-        # HAFIZADAKİ v_end'i GÜNCELLE
-        st.session_state.v_end = end_date.isocalendar()[1]
-        v_end = st.session_state.v_end
-        
-        range_text = f"v.{v_start}" if duration == 1 else f"v.{v_start} - v.{v_end}"
-        st.info(f"Planeringsperiod: **{range_text}**")
+        v_end = end_date.isocalendar()[1]
+    
+    st.info(f"Planerar perioden: **v.{v_start} - v.{v_end}** ({duration} veckor)")
+
 # --- TAB 3: GENERERA ---
 with tab3:
     if st.button("📝 Lägg till veckans specifika ändringar"):
@@ -133,13 +114,27 @@ with tab3:
         if st.button("Rensa noteringar"): st.session_state.weekly_notes = ""; st.rerun()
 
     if st.button("🚀 Generera Agentic Matris", type="primary"):
-        with st.spinner("Ajanlar (DeepSeek + Claude Opus) çalışıyor..."):
-            # AJAN 1: PLANNER (DEEPSEEK)
+        with st.spinner("AI-agenterna (DeepSeek + Claude Opus) arbetar..."):
+            # AGENT 1: PLANNER (DEEPSEEK)
             p_prompt = f"""Skapa matris-schema för v.{v_start}-v.{v_end}.
             PERSONAL: {st.session_state.staff_list}
             VECKANS JUSTERINGAR: {st.session_state.weekly_notes}
-            REGLER: 1 ÖLI (10-12) dagligen. 2 Dispo/dag (FM 08:30-12:30, EM 12:30-17:00). 
-            Torsdag FM: Hyrläkare SKA vara dispo. FM-dispo -> EM endast Tel/Rec. EM-dispo -> FM endast Tel/Rec."""
+            HUVUDREGLER FÖR PLANERINGEN:
+            1 Varje dag mellan kl. 10:00-12:00 SKA exakt en läkare tilldelas ÖLI-mottagning. Denna läkare får INTE vara 'disponibel' FM eller EM i samma dag.
+            2 Varje dag SKA exakt två OLIKA läkare tilldelas som Disponibel: en på FM (kl. 08:30-12:30) och en på EM (kl. 12:30-17:00)
+            3 Torsdag FM: Hyrläkare SKA vara dispo. 
+            4 FM-disponibel SKA få ENDAST Telefon eller Recept EM. 
+            5 EM-disponibel SKA få ENDAST Telefon eller Recept FM.
+            6.Disponibel SKA ansvara för studentstöd
+            7. BVC-PLANERING: Om det anges i veckans ändringar att det är BVC, ska en av de läkare som är markerade som 'BVC-läkare' tilldelas detta på onsdagar och torsdagar. 
+               BVC innebär att läkaren är helt låst för barnavård och har inga akuta tider eller mottagning på vårdcentralen under den tiden.
+            8. RONDTID (11:30-12:00): Varje dag kl. 11:30-12:00 SKA alla läkare tilldelas 'Rondtid'. 
+               UNDANTAG: De läkare som är 'Disponibla', har 'BVC' eller har 'ÖLI-mottagning' under denna tid ska INTE ha rondtid. Alla andra MÅSTE ha detta inplanerat.
+            9. LÄKARMÖTE (Torsdagar): Varje torsdag morgon SKA alla ordinarie läkare (EJ hyrläkare) ha 'Läkarmöte'.
+               - Vid JÄMNA veckor (t.ex. v.16, 18, 20): Kl. 08:00 - 10:00.
+               - Vid UDDA veckor (t.ex. v.15, 17, 19): Kl. 08:00 - 09:00.
+               Under denna tid får INGA ordinarie läkare ha patientbesök, admin eller andra uppgifter. 
+               UNDANTAG: Hyrläkare deltar inte i mötet och ska arbeta normalt (t.ex. med patienter)."""
             
             p_res = openrouter_client.chat.completions.create(
                 model="deepseek/deepseek-chat",
@@ -147,13 +142,38 @@ with tab3:
             )
             draft = p_res.choices[0].message.content
 
-            # AJAN 2: AUDITOR (CLAUDE OPUS)
+            # AGENT 2: AUDITOR (CLAUDE OPUS)
+        with st.spinner("Ajan 2: Claude Opus kalite kontrolü yapıyor..."):
+            # Önce denetleme talimatını hazırlıyoruz
+            auditor_rules = f"""
+            Du är en strikt chefsrevisor. Granska och korrigera schemat för v.{v_start}-{v_end} utifrån dessa kontrollpunkter:
+
+            1. ÖLI-KONTROLL: Finns det exakt en ÖLI-läkare kl. 10:00-12:00 varje dag? Denna person får INTE ha något dispo-pass under hela den dagen.
+            2. DISPO-DUBBLERING: Kontrollera att det är två HELT OLIKA läkare disponibla varje dag (FM 08:30-12:30 och EM 12:30-17:00).
+            3. TORSDAGS-CHECK: Hyrläkaren MÅSTE vara 'Disponibel + Studentstöd' på torsdag FM.
+            4. FM-DISPO BEGRÄNSNING: De som är FM-disponibla får ENDAST ha Telefon eller Recept på eftermiddagen. Inga patienter.
+            5. EM-DISPO BEGRÄNSNING: De som är EM-disponibla får ENDAST ha Telefon eller Recept på förmiddagen. Inga patienter.
+            6. STUDENTSTÖD: Alla disponibla pass ska vara märkta som 'Disponibel + Studentstöd'.
+            7. VECKANS ÄNDRINGAR: Se till att dessa är följda: {st.session_state.weekly_notes}
+            8. BVC-CHECK: Om BVC är aktiverat i veckans ändringar, kontrollera att en behörig BVC-läkare har tilldelats passet och att de inte har fått några andra patienter samtidigt.
+            9. ROND-KONTROLL: Kontrollera att alla läkare har 'Rondtid' kl. 11:30-12:00 varje dag. 
+               Säkerställ att de enda som saknar rondtid är de som är markerade som 'Disponibel', 'BVC' eller 'ÖLI-mottagning'. 
+               Ingen annan får ha patienter eller admin under denna halvtimme.
+            10.TORSDAGS-MÖTESKONTROLL: Kontrollera att det är Läkarmöte på torsdag morgon. 
+               Eftersom detta är en {'JÄMN' if vecka_num % 2 == 0 else 'UDDA'} vecka (v.{vecka_num}), ska alla ordinarie läkare ha blockerad tid för möte kl. {'08:00-10:00' if vecka_num % 2 == 0 else '08:00-09:00'}. 
+               Säkerställ att ingen ordinarie personal har patienter då. Kontrollera att hyrläkare däremot är schemalagd för arbete.
+
+            Om du hittar fel, korrigera dem i slutgiltiga matrisen.
+            SCHEMA SOM SKA GRANSKAS: 
+            {draft}
+            """
+
+            # Şimdi API'yi çağırıyoruz
             a_res = openrouter_client.chat.completions.create(
-                model="anthropic/claude-3.5-sonnet",
-                messages=[{"role": "user", "content": f"Granska och korrigera schemat v.{v_start}-{v_end}. Respektera ändringarna: {st.session_state.weekly_notes}. SCHEMA: {draft}"}]
+                model="anthropic/claude-3-opus",
+                messages=[{"role": "user", "content": auditor_rules}]
             )
-            st.markdown(a_res.choices[0].message.content)
             
-            towrite = io.BytesIO()
-            pd.DataFrame([["Klar"]]).to_excel(towrite, index=False)
-            st.download_button("📥 Excel", data=towrite.getvalue(), file_name=f"VC_Plan_v{v_start}.xlsx")
+            # Sonucu ekrana basıyoruz
+            final_schedule = a_res.choices[0].message.content
+            st.markdown(final_schedule)
