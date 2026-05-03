@@ -1,29 +1,25 @@
 import streamlit as st
 from openai import OpenAI
-import json, os, pandas as pd, base64, io
+import json, os, pandas as pd, base64, io, re
 from datetime import datetime, timedelta
 
 # ==========================================
 # 1. API AYARLARI
 # ==========================================
-# Bulut ortamında anahtarları güvenli kasadan çekiyoruz
 openai_client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-
 openrouter_client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=st.secrets["OPENROUTER_API_KEY"],
 )
 
-st.set_page_config(page_title="VC Planner Pro v20.1", layout="wide", page_icon="🏥")
+st.set_page_config(page_title="VC Strategic Planner Pro", layout="wide", page_icon="🏥")
 
 # --- VERİ YÖNETİMİ ---
-FILE_PATH = "staff_data_v20.json"
-def save_data(data):
-    with open(FILE_PATH, "w") as f: json.dump(data, f)
+DB_FILE = "staff_data_v20.json"
 def load_data():
-    if os.path.exists(FILE_PATH):
+    if os.path.exists(DB_FILE):
         try:
-            with open(FILE_PATH, "r") as f: return json.load(f)
+            with open(DB_FILE, "r", encoding="utf-8") as f: return json.load(f)
         except: return []
     return []
 
@@ -31,149 +27,124 @@ if 'staff_list' not in st.session_state: st.session_state.staff_list = load_data
 if 'edit_index' not in st.session_state: st.session_state.edit_index = None
 if 'weekly_notes' not in st.session_state: st.session_state.weekly_notes = ""
 
-# --- VISION ---
-def encode_image(image_file):
-    return base64.b64encode(image_file.read()).decode('utf-8')
-
-# --- DIALOG BOX (HAFTALIK NOTLAR) ---
-@st.dialog("📝 Veckovisa justeringar ")
-def weekly_notes_dialog():
-    st.write("Skriv in specifika ändringar för denna planeringsperiod:")
-    notes = st.text_area("Ex: Karin är sjuk på måndag, Erik vabbar på onsdag...", value=st.session_state.weekly_notes)
-    if st.button("Spara ändringar"):
-        st.session_state.weekly_notes = notes
-        st.rerun()
+# --- VISION FONKSİYONU ---
+def encode_image(image_file): return base64.b64encode(image_file.read()).decode('utf-8')
 
 # --- HEADER ---
-st.markdown("<h1 style='color: #0077b6;'>🏥 Lyckeby Vårdcentral Schema Planerare <small style='color: grey; font-size: 15px;'>v20.1 Powered by Agentic AI</small></h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='color: #0077b6; text-align: center;'>🏥 Lyckeby Vårdcentral Planner <small style='color: grey; font-size: 15px;'>v51.0 Individual Assignments</small></h1>", unsafe_allow_html=True)
 
-tab1, tab2, tab3 = st.tabs(["👥 Team & Foto", "⚙️ Planeringsperiod", "🚀 Generera Schema"])
+tab1, tab2, tab3 = st.tabs(["👥 Team & Foto", "📅 Planeringsperiod", "🚀 Generera Individuella Listor"])
 
-# --- TAB 1: TEAM & FOTO ---
+# --- TAB 1: TEAM & PROFILER ---
 with tab1:
     c1, c2 = st.columns([1, 2])
     with c1:
         st.subheader("📸 Läs in från foto")
-        uploaded_file = st.file_uploader("Ladda upp personallista", type=["jpg", "png", "jpeg"])
+        uploaded_file = st.file_uploader("Ladda upp personallista (OCR)", type=["jpg", "png", "jpeg"])
         if uploaded_file and st.button("Analysera Bild"):
             base64_img = encode_image(uploaded_file)
-            with st.spinner("AI läser bilden..."):
-                v_res = openai_client.chat.completions.create(
-                    model="gpt-4o",
-                    messages=[{"role": "user", "content": [{"type": "text", "text": "Hitta läkare och grad. JSON: [{'namn': '...', 'oran': 100, 'noter': '', 'hyr': false}]"},
-                                                           {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_img}"}}]}]
-                )
-                st.session_state.staff_list.extend(json.loads(v_res.choices[0].message.content.replace('```json', '').replace('```', '')))
-                save_data(st.session_state.staff_list); st.rerun()
+            with st.spinner("AI läser dokumentet..."):
+                try:
+                    v_res = openai_client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=[{"role": "user", "content": [
+                            {"type": "text", "text": "Hitta namn, grad (%) ve noter. Svara ENDAST som JSON: [{'namn': '...', 'oran': 100, 'noter': '', 'hyr': false, 'p_mott': 30, 'p_akut': 25, 'p_admin': 25, 'p_rec': 10, 'p_tel': 10}]"},
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_img}"}}
+                        ]}]
+                    )
+                    raw_content = v_res.choices[0].message.content
+                    json_match = re.search(r'\[.*\]', raw_content, re.DOTALL)
+                    if json_match:
+                        st.session_state.staff_list.extend(json.loads(json_match.group(0)))
+                        with open(DB_FILE, "w", encoding="utf-8") as f: json.dump(st.session_state.staff_list, f)
+                        st.rerun()
+                except: st.error("Kunde inte läsa bilden.")
 
         st.divider()
-        st.subheader("➕ Hantera Personal")
         idx = st.session_state.edit_index
-        with st.form("staff_form"):
+        with st.form("staff_form_v51"):
             namn = st.text_input("Namn", value=st.session_state.staff_list[idx]['namn'] if idx is not None else "")
-            oran = st.slider("Grad (%)", 10, 100, st.session_state.staff_list[idx]['oran'] if idx is not None else 100)
-            noter = st.text_area("Fasta noter (t.ex. ledig v.28)", value=st.session_state.staff_list[idx]['noter'] if idx is not None else "")
-            hyr = st.checkbox("Hyr-läkare", value=st.session_state.staff_list[idx]['hyr'] if idx is not None else False)
+            oran = st.slider("Grad (%)", 10, 100, st.session_state.staff_list[idx].get('oran', 100) if idx is not None else 100)
+            st.write("**Individuell fördelning (%)**")
+            pm = st.number_input("Mottagning", value=st.session_state.staff_list[idx].get('p_mott', 30) if idx is not None else 30)
+            pa = st.number_input("Akut", value=st.session_state.staff_list[idx].get('p_akut', 25) if idx is not None else 25)
+            pad = st.number_input("Admin", value=st.session_state.staff_list[idx].get('p_admin', 25) if idx is not None else 25)
+            pr = st.number_input("Recept", value=st.session_state.staff_list[idx].get('p_rec', 10) if idx is not None else 10)
+            pt = st.number_input("Telefon", value=st.session_state.staff_list[idx].get('p_tel', 10) if idx is not None else 10)
+            noter = st.text_area("Noter", value=st.session_state.staff_list[idx].get('noter', '') if idx is not None else "")
+            hyr = st.checkbox("Hyr-läkare", value=st.session_state.staff_list[idx].get('hyr', False) if idx is not None else False)
             if st.form_submit_button("Spara"):
-                entry = {"namn": namn, "oran": oran, "noter": noter, "hyr": hyr}
+                entry = {"namn": namn, "oran": oran, "noter": noter, "hyr": hyr, "p_mott": pm, "p_akut": pa, "p_admin": pad, "p_rec": pr, "p_tel": pt}
                 if idx is not None: st.session_state.staff_list[idx] = entry
                 else: st.session_state.staff_list.append(entry)
-                st.session_state.edit_index = None; save_data(st.session_state.staff_list); st.rerun()
+                st.session_state.edit_index = None
+                with open(DB_FILE, "w", encoding="utf-8") as f: json.dump(st.session_state.staff_list, f, ensure_ascii=False, indent=4)
+                st.rerun()
 
     with c2:
         st.subheader("Aktuellt Team")
         for i, p in enumerate(st.session_state.staff_list):
-            ca, cb, cc = st.columns([3, 1, 1])
-            ca.write(f"**{p['namn']}** ({p['oran']}%) {'[HYR]' if p['hyr'] else ''}")
-            if cb.button("Redigera", key=f"ed_{i}"): st.session_state.edit_index = i; st.rerun()
-            if cc.button("Radera", key=f"de_{i}"):
-                st.session_state.staff_list.pop(i); save_data(st.session_state.staff_list); st.rerun()
+            with st.expander(f"👤 {p['namn']} ({p['oran']}%)"):
+                st.write(f"Mott: {p.get('p_mott')}% | Admin: {p.get('p_admin')}% | Rec: {p.get('p_rec')}% | Tel: {p.get('p_tel')}%")
+                b1, b2 = st.columns(2)
+                if b1.button("Redigera", key=f"ed_{i}"): st.session_state.edit_index = i; st.rerun()
+                if b2.button("Radera", key=f"de_{i}"): 
+                    st.session_state.staff_list.pop(i)
+                    with open(DB_FILE, "w", encoding="utf-8") as f: json.dump(st.session_state.staff_list, f)
+                    st.rerun()
 
-# --- TAB 2: PLANERİNGSPERİOD ---
+# --- TAB 2: PERIOD ---
 with tab2:
-    st.subheader("📅 Tidsram")
-    col_a, col_b = st.columns(2)
-    with col_a:
+    st.subheader("📅 Planeringsperiod")
+    c_cal, c_dur = st.columns(2)
+    with c_cal:
         raw_date = st.date_input("Välj startdatum", value=datetime.now())
         start_monday = raw_date - timedelta(days=raw_date.weekday())
         v_start = start_monday.isocalendar()[1]
-    with col_b:
+    with c_dur:
         duration = st.select_slider("Antal veckor", options=[1, 2, 3, 4, 5, 6])
-        end_date = start_monday + timedelta(weeks=duration-1)
-        v_end = end_date.isocalendar()[1]
-    
-    st.info(f"Planerar perioden: **v.{v_start} - v.{v_end}** ({duration} veckor)")
+        v_end = (start_monday + timedelta(weeks=duration-1)).isocalendar()[1]
+    range_text = f"v.{v_start}" if duration == 1 else f"v.{v_start} - v.{v_end}"
+    st.info(f"Planerar: {range_text}")
 
 # --- TAB 3: GENERERA ---
 with tab3:
-    if st.button("📝 Lägg till veckans specifika ändringar"):
-        weekly_notes_dialog()
-    
-    if st.session_state.weekly_notes:
-        st.warning(f"**Aktiva justeringar:** {st.session_state.weekly_notes}")
-        if st.button("Rensa noteringar"): st.session_state.weekly_notes = ""; st.rerun()
+    st.session_state.weekly_notes = st.text_area("Veckans justeringar (t.ex. ledighet, BVC):", value=st.session_state.weekly_notes)
+    if st.button("🚀 GENERERA INDIVIDUELLA ARBETSUPPGIFTER", type="primary"):
+        week_type = "JÄMN" if v_start % 2 == 0 else "UDDA"
+        mtg_time = "08:00-10:00" if v_start % 2 == 0 else "08:00-09:00"
+        with st.spinner("AI-agenterna skapar individuella arbetsplaner..."):
+            try:
+                prompt = f"""Du är en planeringschef. Skapa en detaljerad individuell arbetsplan för {range_text}.
+                PERSONAL: {st.session_state.staff_list}
+                NOTER: {st.session_state.weekly_notes}
 
-    if st.button("🚀 Generera Agentic Matris", type="primary"):
-        with st.spinner("AI-agenterna (DeepSeek + Claude Opus) arbetar..."):
-            # AGENT 1: PLANNER (DEEPSEEK)
-            p_prompt = f"""Skapa matris-schema för v.{v_start}-v.{v_end}.
-            PERSONAL: {st.session_state.staff_list}
-            VECKANS JUSTERINGAR: {st.session_state.weekly_notes}
-            HUVUDREGLER FÖR PLANERINGEN:
-            1 Varje dag mellan kl. 10:00-12:00 SKA exakt en läkare tilldelas ÖLI-mottagning. Denna läkare får INTE vara 'disponibel' FM eller EM i samma dag.
-            2 Varje dag SKA exakt två OLIKA läkare tilldelas som Disponibel: en på FM (kl. 08:30-12:30) och en på EM (kl. 12:30-17:00)
-            3 Torsdag FM: Hyrläkare SKA vara dispo. 
-            4 FM-disponibel SKA få ENDAST Telefon eller Recept EM. 
-            5 EM-disponibel SKA få ENDAST Telefon eller Recept FM.
-            6.Disponibel SKA ansvara för studentstöd
-            7. BVC-PLANERING: Om det anges i veckans ändringar att det är BVC, ska en av de läkare som är markerade som 'BVC-läkare' tilldelas detta på onsdagar och torsdagar. 
-               BVC innebär att läkaren är helt låst för barnavård och har inga akuta tider eller mottagning på vårdcentralen under den tiden.
-            8. RONDTID (11:30-12:00): Varje dag kl. 11:30-12:00 SKA alla läkare tilldelas 'Rondtid'. 
-               UNDANTAG: De läkare som är 'Disponibla', har 'BVC' eller har 'ÖLI-mottagning' under denna tid ska INTE ha rondtid. Alla andra MÅSTE ha detta inplanerat.
-            9. LÄKARMÖTE (Torsdagar): Varje torsdag morgon SKA alla ordinarie läkare (EJ hyrläkare) ha 'Läkarmöte'.
-               - Vid JÄMNA veckor (t.ex. v.16, 18, 20): Kl. 08:00 - 10:00.
-               - Vid UDDA veckor (t.ex. v.15, 17, 19): Kl. 08:00 - 09:00.
-               Under denna tid får INGA ordinarie läkare ha patientbesök, admin eller andra uppgifter. 
-               UNDANTAG: Hyrläkare deltar inte i mötet och ska arbeta normalt (t.ex. med patienter)."""
-            
-            p_res = openrouter_client.chat.completions.create(
-                model="deepseek/deepseek-chat",
-                messages=[{"role": "user", "content": p_prompt}]
-            )
-            draft = p_res.choices[0].message.content
+                DIN UPPGIFT (FÖLJ STRIKT):
+                1. INDIVIDUELL KALKYL: För VARJE person, beräkna exakt antal timmar per vecka för:
+                   - Mottagning
+                   - Röd Tid (Akut)
+                   - Admin
+                   - Recept
+                   - Telefon
+                   (Använd läkarens personliga %-profil. 100% tjänst = 40 timmar totalt).
+                
+                2. ROLLFÖRDELNING: Lista vilka specifika dagar varje person ska vara:
+                   - ÖLI (10-12)
+                   - DISPONIBEL FM (08:30-12:30)
+                   - DISPONIBEL EM (12:30-17:00)
+                
+                3. REGLER ATT KONTROLLERA:
+                   - Hyrläkare är DISPO torsdag FM.
+                   - Inga patienter/rond/fika under dispo-tid.
+                   - Torsdagsmöte {mtg_time} för ordinarie.
+                
+                PRESENTATIONSFORMAT (KRAV):
+                Presentera resultatet person för person. Varje doktor ska ha en egen sektion med sina timmar och sina tilldelade specialdagar (ÖLI/DISPO)."""
 
-            # AGENT 2: AUDITOR (CLAUDE OPUS)
-        with st.spinner("Ajan 2: Claude Opus kalite kontrolü yapıyor..."):
-            # Önce denetleme talimatını hazırlıyoruz
-            auditor_rules = f"""
-            Du är en strikt chefsrevisor. Granska och korrigera schemat för v.{v_start}-{v_end} utifrån dessa kontrollpunkter:
-
-            1. ÖLI-KONTROLL: Finns det exakt en ÖLI-läkare kl. 10:00-12:00 varje dag? Denna person får INTE ha något dispo-pass under hela den dagen.
-            2. DISPO-DUBBLERING: Kontrollera att det är två HELT OLIKA läkare disponibla varje dag (FM 08:30-12:30 och EM 12:30-17:00).
-            3. TORSDAGS-CHECK: Hyrläkaren MÅSTE vara 'Disponibel + Studentstöd' på torsdag FM.
-            4. FM-DISPO BEGRÄNSNING: De som är FM-disponibla får ENDAST ha Telefon eller Recept på eftermiddagen. Inga patienter.
-            5. EM-DISPO BEGRÄNSNING: De som är EM-disponibla får ENDAST ha Telefon eller Recept på förmiddagen. Inga patienter.
-            6. STUDENTSTÖD: Alla disponibla pass ska vara märkta som 'Disponibel + Studentstöd'.
-            7. VECKANS ÄNDRINGAR: Se till att dessa är följda: {st.session_state.weekly_notes}
-            8. BVC-CHECK: Om BVC är aktiverat i veckans ändringar, kontrollera att en behörig BVC-läkare har tilldelats passet och att de inte har fått några andra patienter samtidigt.
-            9. ROND-KONTROLL: Kontrollera att alla läkare har 'Rondtid' kl. 11:30-12:00 varje dag. 
-               Säkerställ att de enda som saknar rondtid är de som är markerade som 'Disponibel', 'BVC' eller 'ÖLI-mottagning'. 
-               Ingen annan får ha patienter eller admin under denna halvtimme.
-            10.TORSDAGS-MÖTESKONTROLL: Kontrollera att det är Läkarmöte på torsdag morgon. 
-               Eftersom detta är en {'JÄMN' if vecka_num % 2 == 0 else 'UDDA'} vecka (v.{vecka_num}), ska alla ordinarie läkare ha blockerad tid för möte kl. {'08:00-10:00' if vecka_num % 2 == 0 else '08:00-09:00'}. 
-               Säkerställ att ingen ordinarie personal har patienter då. Kontrollera att hyrläkare däremot är schemalagd för arbete.
-
-            Om du hittar fel, korrigera dem i slutgiltiga matrisen.
-            SCHEMA SOM SKA GRANSKAS: 
-            {draft}
-            """
-
-            # Şimdi API'yi çağırıyoruz
-            a_res = openrouter_client.chat.completions.create(
-                model="anthropic/claude-3-opus",
-                messages=[{"role": "user", "content": auditor_rules}]
-            )
-            
-            # Sonucu ekrana basıyoruz
-            final_schedule = a_res.choices[0].message.content
-            st.markdown(final_schedule)
+                response = openai_client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[{"role": "system", "content": "Du ger tydliga, personliga instruktioner för varje läkare."},
+                              {"role": "user", "content": prompt}]
+                )
+                st.markdown(response.choices[0].message.content)
+            except Exception as e: st.error(f"Hata: {e}")
