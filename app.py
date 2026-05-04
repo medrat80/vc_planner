@@ -15,7 +15,7 @@ openrouter_client = OpenAI(
 st.set_page_config(page_title="VC Strategic Planner Pro", layout="wide", page_icon="🏥")
 
 # --- VERİ YÖNETİMİ ---
-DB_FILE = "staff_data_v20.json"
+DB_FILE = "staff_backup_260504.json"
 def load_data():
     if os.path.exists(DB_FILE):
         try:
@@ -31,11 +31,11 @@ if 'weekly_notes' not in st.session_state: st.session_state.weekly_notes = ""
 def encode_image(image_file): return base64.b64encode(image_file.read()).decode('utf-8')
 
 # --- HEADER ---
-st.markdown("<h1 style='color: #0077b6; text-align: center;'>🏥 Lyckeby Vårdcentral Planner <small style='color: grey; font-size: 15px;'>v51.0 Individual Assignments</small></h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='color: #0077b6; text-align: center;'>🏥 Lyckeby Vårdcentral Planner <small style='color: grey; font-size: 15px;'>v56.0 Individual Task Metrics</small></h1>", unsafe_allow_html=True)
 
-tab1, tab2, tab3 = st.tabs(["👥 Team & Foto", "📅 Planeringsperiod", "🚀 Generera Individuella Listor"])
+tab1, tab2, tab3 = st.tabs(["👥 Team & Foto", "📅 Planeringsperiod", "🚀 Generera Strategisk Plan"])
 
-# --- TAB 1: TEAM & PROFILER ---
+# --- TAB 1: TEAM & FOTO ---
 with tab1:
     c1, c2 = st.columns([1, 2])
     with c1:
@@ -48,7 +48,7 @@ with tab1:
                     v_res = openai_client.chat.completions.create(
                         model="gpt-4o",
                         messages=[{"role": "user", "content": [
-                            {"type": "text", "text": "Hitta namn, grad (%) ve noter. Svara ENDAST som JSON: [{'namn': '...', 'oran': 100, 'noter': '', 'hyr': false, 'p_mott': 30, 'p_akut': 25, 'p_admin': 25, 'p_rec': 10, 'p_tel': 10}]"},
+                            {"type": "text", "text": "Hitta namn, grad (%) och noter. JSON: [{'namn': '...', 'oran': 100, 'noter': '', 'hyr': false, 'p_mott': 30, 'p_akut': 25, 'p_admin': 25, 'p_rec': 10, 'p_tel': 10}]"},
                             {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_img}"}}
                         ]}]
                     )
@@ -62,15 +62,15 @@ with tab1:
 
         st.divider()
         idx = st.session_state.edit_index
-        with st.form("staff_form_v51"):
+        with st.form("staff_form_v56"):
             namn = st.text_input("Namn", value=st.session_state.staff_list[idx]['namn'] if idx is not None else "")
             oran = st.slider("Grad (%)", 10, 100, st.session_state.staff_list[idx].get('oran', 100) if idx is not None else 100)
-            st.write("**Individuell fördelning (%)**")
-            pm = st.number_input("Mottagning", value=st.session_state.staff_list[idx].get('p_mott', 30) if idx is not None else 30)
-            pa = st.number_input("Akut", value=st.session_state.staff_list[idx].get('p_akut', 25) if idx is not None else 25)
-            pad = st.number_input("Admin", value=st.session_state.staff_list[idx].get('p_admin', 25) if idx is not None else 25)
-            pr = st.number_input("Recept", value=st.session_state.staff_list[idx].get('p_rec', 10) if idx is not None else 10)
-            pt = st.number_input("Telefon", value=st.session_state.staff_list[idx].get('p_tel', 10) if idx is not None else 10)
+            st.write("**Arbetsfördelning (%)**")
+            pm = st.number_input("Mottagning (%)", value=st.session_state.staff_list[idx].get('p_mott', 30) if idx is not None else 30)
+            pa = st.number_input("Akut/Röd (%)", value=st.session_state.staff_list[idx].get('p_akut', 25) if idx is not None else 25)
+            pad = st.number_input("Admin (%)", value=st.session_state.staff_list[idx].get('p_admin', 25) if idx is not None else 25)
+            pr = st.number_input("Recept (%)", value=st.session_state.staff_list[idx].get('p_rec', 10) if idx is not None else 10)
+            pt = st.number_input("Telefon (%)", value=st.session_state.staff_list[idx].get('p_tel', 10) if idx is not None else 10)
             noter = st.text_area("Noter", value=st.session_state.staff_list[idx].get('noter', '') if idx is not None else "")
             hyr = st.checkbox("Hyr-läkare", value=st.session_state.staff_list[idx].get('hyr', False) if idx is not None else False)
             if st.form_submit_button("Spara"):
@@ -84,66 +84,65 @@ with tab1:
     with c2:
         st.subheader("Aktuellt Team")
         for i, p in enumerate(st.session_state.staff_list):
-            with st.expander(f"👤 {p['namn']} ({p['oran']}%)"):
-                st.write(f"Mott: {p.get('p_mott')}% | Admin: {p.get('p_admin')}% | Rec: {p.get('p_rec')}% | Tel: {p.get('p_tel')}%")
-                b1, b2 = st.columns(2)
-                if b1.button("Redigera", key=f"ed_{i}"): st.session_state.edit_index = i; st.rerun()
-                if b2.button("Radera", key=f"de_{i}"): 
+            with st.expander(f"👤 {p['namn']} ({p['oran']}%) {'[HYR]' if p['hyr'] else ''}"):
+                st.markdown(f"**Profil:** Mott {p.get('p_mott')}% | Akut {p.get('p_akut')}% | Admin {p.get('p_admin')}% | Rec {p.get('p_rec')}% | Tel {p.get('p_tel')}%")
+                if st.button("Redigera", key=f"edit_{i}"): st.session_state.edit_index = i; st.rerun()
+                if st.button("Radera", key=f"del_{i}"): 
                     st.session_state.staff_list.pop(i)
                     with open(DB_FILE, "w", encoding="utf-8") as f: json.dump(st.session_state.staff_list, f)
                     st.rerun()
+        if st.session_state.staff_list:
+            json_str = json.dumps(st.session_state.staff_list, ensure_ascii=False, indent=4)
+            st.download_button("📥 Backup Personallista", json_str, "staff_data_v20.json")
 
 # --- TAB 2: PERIOD ---
 with tab2:
     st.subheader("📅 Planeringsperiod")
     c_cal, c_dur = st.columns(2)
     with c_cal:
-        raw_date = st.date_input("Välj startdatum", value=datetime.now())
+        raw_date = st.date_input("Välj startmåndag", value=datetime.now())
         start_monday = raw_date - timedelta(days=raw_date.weekday())
         v_start = start_monday.isocalendar()[1]
     with c_dur:
         duration = st.select_slider("Antal veckor", options=[1, 2, 3, 4, 5, 6])
         v_end = (start_monday + timedelta(weeks=duration-1)).isocalendar()[1]
     range_text = f"v.{v_start}" if duration == 1 else f"v.{v_start} - v.{v_end}"
-    st.info(f"Planerar: {range_text}")
+    st.info(f"Vald period: **{range_text}**")
 
 # --- TAB 3: GENERERA ---
 with tab3:
-    st.session_state.weekly_notes = st.text_area("Veckans justeringar (t.ex. ledighet, BVC):", value=st.session_state.weekly_notes)
-    if st.button("🚀 GENERERA INDIVIDUELLA ARBETSUPPGIFTER", type="primary"):
+    st.session_state.weekly_notes = st.text_area("Haftalık Notlar / Justeringar:", value=st.session_state.weekly_notes)
+    if st.button(f"🚀 GENERERA STRATEGISK PLAN", type="primary"):
         week_type = "JÄMN" if v_start % 2 == 0 else "UDDA"
         mtg_time = "08:00-10:00" if v_start % 2 == 0 else "08:00-09:00"
-        with st.spinner("AI-agenterna skapar individuella arbetsplaner..."):
+        with st.spinner("AI-agenterna beräknar individuella kvoter och roterar roller..."):
             try:
-                prompt = f"""Du är en planeringschef. Skapa en detaljerad individuell arbetsplan för {range_text}.
+                prompt = f"""Du är en strategisk planeringschef. Skapa en plan för {range_text} start {start_monday}.
                 PERSONAL: {st.session_state.staff_list}
                 NOTER: {st.session_state.weekly_notes}
 
-                DIN UPPGIFT (FÖLJ STRIKT):
-                1. INDIVIDUELL KALKYL: För VARJE person, beräkna exakt antal timmar per vecka för:
-                   - Mottagning
-                   - Röd Tid (Akut)
-                   - Admin
-                   - Recept
-                   - Telefon
-                   (Använd läkarens personliga %-profil. 100% tjänst = 40 timmar totalt).
+                DINA 9 STRIKTA KAPACITETSREGLER:
+                1. ÖLI (10-12): Exakt 1 person per dag.
+                2. DISPO FM (08:30-12:30): Exakt 1 person per dag.
+                3. DISPO EM (12:30-17:00): Exakt 1 person per dag.
+                4. INGA KROCKAR: En person får aldrig ha mer än en av rollerna (ÖLI, DISPO FM, DISPO EM) på samma dag.
+                5. TORSDAG FM: Hyrläkaren SKA vara DISPONIBEL FM. Inga ordinarie läkare på dispo då.
+                6. DISPO-KRAV: FM-dispo har Tel/Rec/Admin på EM. EM-dispo har Tel/Rec/Admin na FM.
+                7. STUDENTSTÖD: Kopplas till alla Dispo-pass.
+                8. RONDTID 11:30: För alla utom dispo, bvc, öli.
+                9. MÖTE: Torsdag kl {mtg_time} för alla ordinarie.
+
+                VECKOKALKYL (MÅSTE FINNAS FÖR VARJE LÄKARE):
+                - Beräkna veckotimmar baserat på deras %-profil (Mott, Akut, Admin, Rec, Tel). 
+                - Exempel: Om en 100% läkare har 30% Mottagning = 12 timmar/vecka.
                 
-                2. ROLLFÖRDELNING: Lista vilka specifika dagar varje person ska vara:
-                   - ÖLI (10-12)
-                   - DISPONIBEL FM (08:30-12:30)
-                   - DISPONIBEL EM (12:30-17:00)
-                
-                3. REGLER ATT KONTROLLERA:
-                   - Hyrläkare är DISPO torsdag FM.
-                   - Inga patienter/rond/fika under dispo-tid.
-                   - Torsdagsmöte {mtg_time} för ordinarie.
-                
-                PRESENTATIONSFORMAT (KRAV):
-                Presentera resultatet person för person. Varje doktor ska ha en egen sektion med sina timmar och sina tilldelade specialdagar (ÖLI/DISPO)."""
+                FORMAT (KRAV):
+                - 'DAGLIG ÖVERSIKT': Lista vem som är ÖLI, Dispo FM, Dispo EM dag för dag.
+                - 'INDIVIDUELLA ARBETSUPPGIFTER': För varje läkare, lista deras tilldelade specialpass (ÖLI/DISPO) OCH deras beräknade vecko-timmar för varje kategori."""
 
                 response = openai_client.chat.completions.create(
                     model="gpt-4o",
-                    messages=[{"role": "system", "content": "Du ger tydliga, personliga instruktioner för varje läkare."},
+                    messages=[{"role": "system", "content": "Du är en expert på resursfördelning. Du ger exakta tidskalkyler per person."},
                               {"role": "user", "content": prompt}]
                 )
                 st.markdown(response.choices[0].message.content)
